@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Surface Observer — Field Observation Tracker</title>
+  <meta name="description" content="Track surface observations across cities, months, and sites." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:opsz,wght@9..40,300..700&display=swap" rel="stylesheet" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='1' y='1' width='13' height='13' rx='2' fill='none' stroke='%23326B4B' stroke-width='2'/><rect x='18' y='1' width='13' height='13' rx='2' fill='none' stroke='%23326B4B' stroke-width='2'/><rect x='1' y='18' width='13' height='13' rx='2' fill='none' stroke='%23326B4B' stroke-width='2'/><rect x='18' y='18' width='13' height='13' rx='2' fill='%23326B4B'/><path d='M22 25l2 2 4-4' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f7f6f2; --surface: #f9f8f5; --surface-2: #fbfbf9;
+      --border: #d4d1ca; --border-light: #e6e4df;
+      --text: #1a2f22; --text-muted: #6b7a70; --text-faint: #a0afa4;
+      --primary: #326B4B; --primary-hover: #265339; --primary-light: #e0ede5;
+      --green-bg: #dff0e3; --green-border: #4caf6a; --green-text: #1b5e2e;
+      --amber: #c07a1e; --red: #b33a3a; --red-bg: rgba(179,58,58,0.08);
+      --blue: #2563a8; --blue-bg: #e8f0fb; --blue-border: #7aaae8;
+      --radius: 0.5rem; --radius-lg: 0.75rem;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 14px rgba(0,0,0,0.09);
+      --transition: 200ms cubic-bezier(0.16,1,0.3,1);
+      --font-body: 'DM Sans', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+    [data-theme="dark"] {
+      --bg: #111a14; --surface: #16201a; --surface-2: #1b261f;
+      --border: #2a3a30; --border-light: #223028;
+      --text: #c8d5cc; --text-muted: #7a8f80; --text-faint: #4a5e50;
+      --primary: #5aaa73; --primary-hover: #48906a; --primary-light: #1e3328;
+      --green-bg: #1a3322; --green-border: #3d8a52; --green-text: #7ace8c;
+      --amber: #d4a040; --red: #d05050; --red-bg: rgba(208,80,80,0.12);
+      --blue: #5b9bd5; --blue-bg: #162030; --blue-border: #2a5080;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
+      --shadow-md: 0 4px 14px rgba(0,0,0,0.35);
+    }
+    html { -webkit-font-smoothing: antialiased; scroll-behavior: smooth; }
+    body { min-height: 100dvh; font-family: var(--font-body); font-size: 15px; color: var(--text); background: var(--bg); line-height: 1.5; }
+    input, button, select, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; background: none; border: none; }
+
+    /* ── Header ── */
+    .header { position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--border-light); background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(12px); }
+    .header-inner { max-width: 80rem; margin: 0 auto; padding: 0.7rem 1.5rem; display: flex; align-items: center; gap: 0.75rem; }
+    .logo-text h1 { font-size: 1rem; font-weight: 600; }
+    .logo-text p { font-size: 0.7rem; color: var(--text-muted); }
+    .theme-btn { margin-left: auto; width: 2.1rem; height: 2.1rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid var(--border-light); background: var(--surface); transition: background var(--transition); flex-shrink: 0; }
+    .theme-btn:hover { background: var(--primary-light); }
+
+    /* ── Layout ── */
+    .main { max-width: 80rem; margin: 0 auto; padding: 1.25rem 1.5rem; display: grid; gap: 1.25rem; grid-template-columns: 1fr; }
+    @media (min-width: 1100px) { .main { grid-template-columns: minmax(0, 1fr) 340px; } }
+    @media (max-width: 600px) { .header-inner, .main { padding-left: 1rem; padding-right: 1rem; } }
+
+    /* ── Card ── */
+    .card { background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius-lg); overflow: hidden; }
+    .card-header { padding: 0.6rem 1rem; background: color-mix(in srgb, var(--bg) 55%, var(--surface)); display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+    .card-label { font-size: 0.63rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-muted); }
+
+    /* ── Top selectors ── */
+    .selector-row { padding: 1rem; display: flex; flex-wrap: wrap; gap: 0.625rem; align-items: flex-end; }
+    .sel-group { display: flex; flex-direction: column; gap: 0.2rem; flex: 1; min-width: 110px; max-width: 200px; }
+    .sel-label { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
+    .sel-select {
+      height: 2.25rem; padding: 0 2rem 0 0.65rem; border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--bg); font-size: 0.82rem; font-weight: 500; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7a70' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 0.6rem center;
+      transition: border-color var(--transition), box-shadow var(--transition); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .sel-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent); }
+    [data-theme="dark"] .sel-select { background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a8f80' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+
+    /* ── Site grid panel ── */
+    .site-grid-wrap { padding: 1rem; border-top: 1px solid var(--border-light); }
+    .site-grid-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+    .site-grid-title { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); }
+    .site-grid-actions { display: flex; gap: 0.5rem; }
+    .site-grid { display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
+
+    /* Site pill */
+    .site-pill {
+      position: relative; border: 2px solid var(--border); border-radius: var(--radius-lg);
+      background: var(--bg); padding: 0.5rem 0.5rem 0.4rem;
+      display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
+      transition: all var(--transition); cursor: pointer; user-select: none;
+    }
+    .site-pill:hover { border-color: var(--primary); box-shadow: var(--shadow-sm); }
+    .site-pill.observed { background: var(--green-bg); border-color: var(--green-border); }
+    .site-pill.active-site { border-color: var(--blue); background: var(--blue-bg); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 25%, transparent); }
+    .site-pill.active-site.observed { border-color: var(--green-border); background: var(--green-bg); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 25%, transparent); }
+    .site-pill-id { font-family: var(--font-mono); font-size: 0.72rem; font-weight: 500; line-height: 1; }
+    .site-pill-status { font-size: 0.6rem; color: var(--text-faint); font-family: var(--font-mono); }
+    .site-pill.observed .site-pill-status { color: var(--green-text); }
+    .site-pill.active-site .site-pill-status:not(.obs-status) { color: var(--blue); }
+    .site-pill-check {
+      position: absolute; top: 0.3rem; right: 0.3rem;
+      width: 1rem; height: 1rem; border-radius: 50%;
+      background: #2d9e4e; display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity var(--transition);
+    }
+    .site-pill.observed .site-pill-check { opacity: 1; }
+    .site-pill-surfaces { font-size: 0.58rem; color: var(--text-faint); margin-top: 0.1rem; }
+
+    /* Btn styles */
+    .btn { height: 2.25rem; padding: 0 0.9rem; display: inline-flex; align-items: center; gap: 0.35rem; border-radius: var(--radius); font-size: 0.82rem; font-weight: 500; transition: all var(--transition); }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-outline { border: 1px solid var(--border); background: var(--surface); }
+    .btn-outline:hover { background: var(--primary-light); border-color: var(--primary); }
+    .btn-sm { height: 1.9rem; padding: 0 0.7rem; font-size: 0.75rem; }
+    .btn-icon { width: 2.25rem; padding: 0; justify-content: center; }
+    .btn-ghost { color: var(--text-muted); }
+    .btn-ghost:hover { color: var(--text); background: var(--primary-light); }
+
+    /* ── Surface panel ── */
+    .surface-panel { border-top: 1px solid var(--border-light); }
+    .surface-panel-header { padding: 0.7rem 1rem; background: color-mix(in srgb, var(--blue-bg) 60%, var(--surface)); border-bottom: 1px solid var(--border-light); display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .site-badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.65rem; border-radius: 999px; background: var(--blue-bg); border: 1px solid var(--blue-border); font-size: 0.72rem; font-weight: 600; color: var(--blue); font-family: var(--font-mono); }
+    .surface-panel-title { font-size: 0.78rem; font-weight: 600; color: var(--text); }
+    .surface-input-row { padding: 0.75rem 1rem; display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border-light); }
+    .text-input { flex: 1; height: 2.1rem; padding: 0 0.65rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); font-size: 0.82rem; transition: border-color var(--transition), box-shadow var(--transition); }
+    .text-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent); }
+
+    .surface-quick { padding: 0.5rem 1rem; display: flex; flex-wrap: wrap; gap: 0.6rem; border-bottom: 1px solid var(--border-light); }
+    .quick-link { display: flex; align-items: center; gap: 0.3rem; font-size: 0.72rem; color: var(--text-muted); cursor: pointer; transition: color var(--transition); background: none; border: none; padding: 0; }
+    .quick-link:hover { color: var(--primary); text-decoration: underline; }
+    .quick-link.danger:hover { color: var(--red); }
+    .quick-link.ml-auto { margin-left: auto; }
+
+    /* Filter bar */
+    .filter-bar { display: flex; gap: 0.2rem; padding: 0.75rem 1rem 0; }
+    .filter-btn { padding: 0.3rem 0.65rem; border-radius: var(--radius); font-size: 0.72rem; font-weight: 500; color: var(--text-muted); transition: all var(--transition); }
+    .filter-btn.active { background: var(--surface-2); color: var(--text); box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); }
+    .filter-btn:not(.active):hover { color: var(--text); }
+
+    /* Surface list */
+    .surface-list-wrap { padding: 0.75rem 1rem; display: flex; flex-direction: column; gap: 0.4rem; }
+    .surface-card { display: flex; align-items: center; gap: 0.65rem; padding: 0.65rem 0.85rem; border: 2px solid var(--border-light); border-radius: var(--radius-lg); transition: all var(--transition); }
+    .surface-card:hover { box-shadow: var(--shadow-sm); }
+    .surface-card.observed { background: var(--green-bg); border-color: var(--green-border); }
+    .surface-card.observed .s-name { text-decoration: line-through; opacity: 0.65; }
+    .s-toggle { width: 1.85rem; height: 1.85rem; flex-shrink: 0; border-radius: 0.375rem; border: 2px solid currentColor; display: flex; align-items: center; justify-content: center; opacity: 0.4; transition: all var(--transition); }
+    .surface-card.observed .s-toggle { background: #2d9e4e; border-color: #2d9e4e; color: #fff; opacity: 1; box-shadow: 0 1px 3px rgba(45,158,78,.3); }
+    .s-info { flex: 1; min-width: 0; }
+    .s-name { font-size: 0.82rem; font-weight: 500; }
+    .s-status { font-size: 0.65rem; opacity: 0.55; font-family: var(--font-mono); }
+    .surface-card.observed .s-status { color: var(--green-text); opacity: 1; }
+    .s-actions { display: flex; gap: 0.2rem; opacity: 0; transition: opacity var(--transition); }
+    .surface-card:hover .s-actions { opacity: 1; }
+    @media (max-width: 600px) { .s-actions { opacity: 1; } }
+    .s-btn { width: 1.6rem; height: 1.6rem; display: flex; align-items: center; justify-content: center; border-radius: 0.375rem; transition: background var(--transition); }
+    .s-btn:hover { background: rgba(0,0,0,.08); }
+    [data-theme="dark"] .s-btn:hover { background: rgba(255,255,255,.08); }
+    .s-btn.del:hover { background: var(--red-bg); color: var(--red); }
+    .rename-input { width: 100%; background: transparent; border: none; border-bottom: 1px solid currentColor; outline: none; font-size: 0.82rem; font-weight: 500; padding: 0.1rem 0; }
+    .empty-state { padding: 2.5rem 1rem; text-align: center; }
+    .empty-icon { font-size: 1.8rem; opacity: 0.25; margin-bottom: 0.5rem; }
+    .empty-text { font-size: 0.82rem; color: var(--text-muted); }
+    .empty-hint { font-size: 0.72rem; color: var(--text-faint); margin-top: 0.25rem; }
+
+    /* ── Right sidebar ── */
+    .sidebar { display: flex; flex-direction: column; gap: 1.25rem; }
+
+    /* Summary */
+    .progress-bar { height: 0.375rem; background: var(--border-light); }
+    .progress-fill { height: 100%; background: #2d9e4e; transition: width 500ms ease; }
+    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); }
+    .stat { padding: 0.65rem; text-align: center; border-right: 1px solid var(--border-light); }
+    .stat:last-child { border-right: none; }
+    .stat-val { font-family: var(--font-mono); font-size: 1.15rem; font-weight: 500; }
+    .stat-val.green { color: #2d9e4e; }
+    .stat-val.amber { color: var(--amber); }
+    .stat-label { font-size: 0.62rem; color: var(--text-muted); margin-top: 0.1rem; }
+    .sum-table { width: 100%; font-size: 0.82rem; }
+    .sum-table thead { background: color-mix(in srgb, var(--bg) 40%, var(--surface)); }
+    .sum-table th { text-align: left; padding: 0.4rem 0.85rem; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+    .sum-table th:last-child { text-align: center; }
+    .sum-table td { padding: 0.4rem 0.85rem; border-top: 1px solid var(--border-light); }
+    .sum-table td:first-child { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-muted); }
+    .sum-table td:last-child { text-align: center; }
+    .sum-table tr.obs-row { background: color-mix(in srgb, var(--green-bg) 45%, transparent); }
+    .badge { display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.12rem 0.45rem; border-radius: 999px; font-family: var(--font-mono); font-size: 0.62rem; font-weight: 600; border: 1px solid; }
+    .badge-green { background: var(--green-bg); color: var(--green-text); border-color: var(--green-border); }
+    .badge-amber { color: var(--amber); border-color: var(--amber); }
+
+    /* Sessions */
+    .sess-input-row { padding: 0.65rem 1rem; border-bottom: 1px solid var(--border-light); display: flex; gap: 0.4rem; }
+    .sess-input-row .text-input { height: 1.9rem; font-size: 0.78rem; }
+    .sess-input-row .btn { height: 1.9rem; font-size: 0.72rem; padding: 0 0.65rem; }
+    .sess-item { display: flex; align-items: center; gap: 0.4rem; padding: 0.55rem 1rem; border-bottom: 1px solid var(--border-light); transition: background var(--transition); }
+    .sess-item:last-child { border-bottom: none; }
+    .sess-item:hover { background: color-mix(in srgb, var(--bg) 40%, var(--surface)); }
+    .sess-name { flex: 1; font-size: 0.82rem; font-weight: 500; truncate: ellipsis; overflow: hidden; white-space: nowrap; }
+    .sess-load { display: flex; align-items: center; gap: 0.2rem; font-size: 0.72rem; color: var(--primary); flex-shrink: 0; }
+    .sess-load:hover { text-decoration: underline; }
+    .sess-del { width: 1.5rem; height: 1.5rem; display: flex; align-items: center; justify-content: center; border-radius: 0.375rem; color: var(--text-muted); flex-shrink: 0; transition: all var(--transition); }
+    .sess-del:hover { background: var(--red-bg); color: var(--red); }
+    .empty-sessions { padding: 1.25rem; text-align: center; font-size: 0.82rem; color: var(--text-muted); }
+
+    /* Modals */
+    .modal-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.4); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 1rem; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
+    .modal-overlay.open { opacity: 1; pointer-events: auto; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); width: 100%; max-width: 26rem; box-shadow: var(--shadow-md); transform: translateY(8px); transition: transform 200ms ease; }
+    .modal-overlay.open .modal { transform: none; }
+    .modal-hd { padding: 0.9rem 1.1rem; border-bottom: 1px solid var(--border-light); font-size: 0.95rem; font-weight: 600; }
+    .modal-bd { padding: 0.9rem 1.1rem; font-size: 0.85rem; color: var(--text-muted); line-height: 1.6; }
+    .modal-ft { padding: 0.7rem 1.1rem; display: flex; gap: 0.4rem; justify-content: flex-end; border-top: 1px solid var(--border-light); }
+    .btn-cancel { background: var(--surface); border: 1px solid var(--border); }
+    .btn-cancel:hover { background: var(--bg); }
+    .btn-danger { background: var(--red); color: #fff; }
+    .btn-danger:hover { opacity: .88; }
+    .bulk-ta { width: 100%; min-height: 7rem; resize: vertical; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); padding: 0.65rem; font-size: 0.82rem; margin-top: 0.5rem; }
+    .bulk-ta:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent); }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 300; padding: 0.65rem 1rem; border-radius: var(--radius); background: var(--text); color: var(--bg); font-size: 0.78rem; font-weight: 500; box-shadow: var(--shadow-md); transform: translateY(120%); opacity: 0; transition: transform 300ms ease, opacity 300ms ease; }
+    .toast.show { transform: none; opacity: 1; }
+
+    /* ── Habitat-type filter bar ── */
+    .htype-bar { display: flex; gap: 0.3rem; flex-wrap: wrap; padding: 0.75rem 1rem 0; }
+    .htype-btn {
+      height: 1.9rem; padding: 0 0.7rem;
+      border-radius: var(--radius); border: 1px solid var(--border-light);
+      font-size: 0.72rem; font-weight: 600; font-family: var(--font-mono);
+      color: var(--text-muted); background: var(--bg);
+      transition: all var(--transition); cursor: pointer;
+    }
+    .htype-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .htype-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .htype-btn.active-all { background: var(--surface-2); color: var(--text); border-color: var(--border); box-shadow: var(--shadow-sm); }
+
+    /* Habitat tag inside pill */
+    .pill-habitat-tag {
+      font-size: 0.55rem; font-family: var(--font-mono); font-weight: 600;
+      letter-spacing: 0.04em; color: var(--text-faint);
+      background: var(--border-light); border-radius: 3px;
+      padding: 0.05rem 0.28rem; margin-bottom: 0.05rem;
+    }
+    .site-pill.observed .pill-habitat-tag { background: color-mix(in srgb, var(--green-border) 25%, transparent); color: var(--green-text); }
+
+    /* No-select prompt */
+    .prompt-card { border: 2px dashed var(--border-light); border-radius: var(--radius-lg); padding: 3rem 1.5rem; text-align: center; }
+    .prompt-icon { font-size: 2.5rem; opacity: 0.2; margin-bottom: 0.75rem; }
+    .prompt-text { font-size: 0.875rem; color: var(--text-muted); }
+    .prompt-hint { font-size: 0.75rem; color: var(--text-faint); margin-top: 0.3rem; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══════════════════════════════════════════ -->
+<header class="header">
+  <div class="header-inner">
+    <svg width="34" height="34" viewBox="0 0 36 36" fill="none">
+      <rect x="2" y="2" width="14" height="14" rx="2" stroke="currentColor" stroke-width="2" style="color:var(--primary)"/>
+      <rect x="20" y="2" width="14" height="14" rx="2" stroke="currentColor" stroke-width="2" style="color:var(--primary)"/>
+      <rect x="2" y="20" width="14" height="14" rx="2" stroke="currentColor" stroke-width="2" style="color:var(--primary)"/>
+      <rect x="20" y="20" width="14" height="14" rx="2" fill="currentColor" style="color:var(--primary)"/>
+      <path d="M24 27l2 2 4-4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="logo-text">
+      <h1>Surface Observer</h1>
+      <p>Field Observation Tracker</p>
+    </div>
+    <button class="theme-btn" id="themeToggle" aria-label="Toggle theme">
+      <svg id="themeIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<!-- ═══ MAIN ══════════════════════════════════════════════ -->
+<main class="main">
+
+  <!-- Left column -->
+  <div>
+
+    <!-- City + Month selectors + Site grid -->
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="selector-row">
+        <div class="sel-group">
+          <label class="sel-label" for="citySelect">City</label>
+          <select class="sel-select" id="citySelect"></select>
+        </div>
+        <div class="sel-group">
+          <label class="sel-label" for="monthSelect">Month</label>
+          <select class="sel-select" id="monthSelect"></select>
+        </div>
+        <div class="sel-group" style="min-width:130px;max-width:220px">
+          <label class="sel-label" for="habitatSelect">Habitat</label>
+          <select class="sel-select" id="habitatSelect"></select>
+        </div>
+      </div>
+
+      <!-- Site ID grid (shows after city+month selected) -->
+      <div id="siteGridWrap" style="display:none">
+
+        <!-- Habitat-type filter bar -->
+        <div class="htype-bar" id="htypeBar">
+          <button class="htype-btn active-all active" data-htype="all">All</button>
+          <button class="htype-btn" data-htype="HE">HE</button>
+          <button class="htype-btn" data-htype="UP">UP</button>
+          <button class="htype-btn" data-htype="G">G</button>
+          <button class="htype-btn" data-htype="N">N</button>
+        </div>
+
+        <div class="site-grid-wrap">
+          <div class="site-grid-header">
+            <span class="site-grid-title" id="siteGridLabel">Sites</span>
+            <div class="site-grid-actions">
+              <button class="btn btn-outline btn-sm" id="markAllSitesBtn" title="Mark all visible sites observed">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                All observed
+              </button>
+              <button class="btn btn-outline btn-sm" id="resetSitesBtn" title="Reset all visible sites">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                Reset
+              </button>
+            </div>
+          </div>
+          <div class="site-grid" id="siteGrid"></div>
+          <p style="margin-top:0.6rem;font-size:0.68rem;color:var(--text-faint)">Click a site to mark it as observed · Click again to unmark</p>
+        </div>
+      </div>
+
+
+    </div>
+
+  </div>
+
+  <!-- Right sidebar -->
+  <div class="sidebar">
+
+    <!-- Summary -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-label">Summary</span>
+        <span id="pctLabel" style="font-family:var(--font-mono);font-size:0.72rem;color:var(--text-muted)">0%</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      <div class="stats-row">
+        <div class="stat"><div class="stat-val" id="totalCount">0</div><div class="stat-label">Total</div></div>
+        <div class="stat"><div class="stat-val green" id="obsCount">0</div><div class="stat-label">Observed</div></div>
+        <div class="stat"><div class="stat-val amber" id="pendCount">0</div><div class="stat-label">Pending</div></div>
+      </div>
+      <div id="sumTableWrap" style="border-top:1px solid var(--border-light);display:none">
+        <table class="sum-table">
+          <thead><tr><th>#</th><th>Site ID</th><th>Status</th></tr></thead>
+          <tbody id="sumBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Sessions -->
+    <div class="card">
+      <div class="card-header"><span class="card-label">Saved Sessions</span></div>
+      <div class="sess-input-row">
+        <input type="text" id="sessionInput" class="text-input" placeholder="Session name…" />
+        <button class="btn btn-primary" id="saveSessionBtn" style="gap:0.25rem">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Save
+        </button>
+      </div>
+      <div id="sessionList"></div>
+    </div>
+
+  </div>
+</main>
+
+<!-- Modals -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal">
+    <div class="modal-hd" id="confTitle">Confirm</div>
+    <div class="modal-bd"><p id="confMsg"></p></div>
+    <div class="modal-ft"><button class="btn btn-cancel" data-close="confirmModal">Cancel</button><button class="btn btn-danger" id="confAction">Confirm</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- ═══ SCRIPT ════════════════════════════════════════════ -->
+<script>
+// ─── CONFIG ── Edit here ────────────────────────────────
+const CONFIG = {
+  cities: ['Warszawa', 'Poznań', 'Wrocław'],
+  months: ['April', 'May', 'June', 'July', 'August'],
+  habitats: ['Urban park', 'Housing estate', 'Urban meadow', 'Natural'],
+  // sites[city][habitat] = list of site IDs
+  sites: {
+    'Warszawa': {
+      'Urban park':    ['WAR_UP_2','WAR_UP_4','WAR_UP_5','WAR_UP_6','WAR_UP_7','WAR_UP_9'],
+      'Housing estate':['WAR_HE_2','WAR_HE_4','WAR_HE_5','WAR_HE_6','WAR_HE_8','WAR_HE_10'],
+      'Urban meadow':  ['WAR_G_2','WAR_G_3','WAR_G_4','WAR_G_5','WAR_G_7','WAR_G_9'],
+      'Natural':       ['WAR_N_1','WAR_N_2','WAR_N_3','WAR_N_5','WAR_N_9','WAR_N_10'],
+    },
+    'Poznań': {
+      'Urban park':    ['POZ_UP_1','POZ_UP_2','POZ_UP_5','POZ_UP_7','POZ_UP_9','POZ_UP_10'],
+      'Housing estate':['POZ_HE_4','POZ_HE_6','POZ_HE_7','POZ_HE_8','POZ_HE_9','POZ_HE_10'],
+      'Urban meadow':  ['POZ_G_1','POZ_G_3','POZ_G_4','POZ_G_6','POZ_G_7','POZ_G_8'],
+      'Natural':       ['POZ_N_3','POZ_N_4','POZ_N_5','POZ_N_6','POZ_N_7','POZ_N_10'],
+    },
+    'Wrocław': {
+      'Urban park':    ['WRO_UP_1','WRO_UP_3','WRO_UP_6','WRO_UP_7','WRO_UP_8','WRO_UP_10'],
+      'Housing estate':['WRO_HE_1','WRO_HE_3','WRO_HE_4','WRO_HE_7','WRO_HE_8','WRO_HE_9'],
+      'Urban meadow':  ['WRO_G_2','WRO_G_4','WRO_G_5','WRO_G_6','WRO_G_9','WRO_G_10'],
+      'Natural':       ['WRO_N_2','WRO_N_4','WRO_N_5','WRO_N_7','WRO_N_8','WRO_N_10'],
+    },
+  }
+};
+// ────────────────────────────────────────────────────────
+
+// State
+// allData[city][month][habitat][siteId] = { observed: bool }
+let allData = {};
+let sessions = [];
+let nextSessId = 1;
+let selCity = '', selMonth = '', selHabitat = '';
+let selHtype = 'all'; // 'all' | 'HE' | 'UP' | 'G' | 'N'
+let confirmCb = null;
+
+// ─── Persistence ─────────────────────────────────────────
+function save() { try { localStorage.setItem('so3_data', JSON.stringify(allData)); } catch(e){} }
+function saveSess() { try { localStorage.setItem('so3_sess', JSON.stringify(sessions)); localStorage.setItem('so3_nsid', nextSessId); } catch(e){} }
+function loadData() {
+  try {
+    const d = localStorage.getItem('so3_data'); if (d) allData = JSON.parse(d);
+    const s = localStorage.getItem('so3_sess'); if (s) sessions = JSON.parse(s);
+    const n = localStorage.getItem('so3_nsid'); if (n) nextSessId = parseInt(n);
+  } catch(e) {}
+}
+function ensureSite(city, month, habitat, site) {
+  if (!allData[city]) allData[city] = {};
+  if (!allData[city][month]) allData[city][month] = {};
+  if (!allData[city][month][habitat]) allData[city][month][habitat] = {};
+  if (!allData[city][month][habitat][site]) allData[city][month][habitat][site] = { observed: false };
+  return allData[city][month][habitat][site];
+}
+function getSite(city, month, habitat, site) {
+  return allData[city]?.[month]?.[habitat]?.[site] ?? null;
+}
+
+// ─── Theme ───────────────────────────────────────────────
+let theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+try { const t = localStorage.getItem('so3_theme'); if (t) theme = t; } catch(e){}
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('themeIcon').innerHTML = theme === 'dark'
+    ? '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>'
+    : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+}
+applyTheme();
+document.getElementById('themeToggle').addEventListener('click', () => {
+  theme = theme === 'dark' ? 'light' : 'dark';
+  applyTheme();
+  try { localStorage.setItem('so3_theme', theme); } catch(e){}
+});
+
+// ─── Toast ───────────────────────────────────────────────
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+// ─── Modals ───────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => closeModal(b.dataset.close)));
+document.querySelectorAll('.modal-overlay').forEach(el => el.addEventListener('click', e => { if (e.target === el) closeModal(el.id); }));
+function confirmDlg(title, msg, label, cb) {
+  document.getElementById('confTitle').textContent = title;
+  document.getElementById('confMsg').innerHTML = msg;
+  const btn = document.getElementById('confAction');
+  btn.textContent = label;
+  btn.className = label.toLowerCase().includes('load') ? 'btn btn-primary' : 'btn btn-danger';
+  confirmCb = cb; openModal('confirmModal');
+}
+document.getElementById('confAction').addEventListener('click', () => { closeModal('confirmModal'); if (confirmCb) { confirmCb(); confirmCb = null; } });
+
+// ─── Build selects ────────────────────────────────────────
+function buildSelect(sel, items, placeholder) {
+  sel.innerHTML = `<option value="">${placeholder}</option>` + items.map(i => `<option value="${i}">${i}</option>`).join('');
+}
+buildSelect(document.getElementById('citySelect'), CONFIG.cities, '— Select city —');
+buildSelect(document.getElementById('monthSelect'), CONFIG.months, '— Select month —');
+buildSelect(document.getElementById('habitatSelect'), CONFIG.habitats, '— Select habitat —');
+
+document.getElementById('citySelect').addEventListener('change', function() {
+  selCity = this.value; renderSiteGrid(); renderSummary();
+});
+document.getElementById('monthSelect').addEventListener('change', function() {
+  selMonth = this.value; renderSiteGrid(); renderSummary();
+});
+document.getElementById('habitatSelect').addEventListener('change', function() {
+  selHabitat = this.value;
+  // If a specific habitat is chosen, keep htype filter in sync (or reset to all)
+  selHtype = 'all';
+  document.querySelectorAll('.htype-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.htype === 'all');
+    b.classList.toggle('active-all', b.dataset.htype === 'all');
+  });
+  renderSiteGrid(); renderSummary();
+});
+
+// ─── Habitat-type filter bar ──────────────────────────────
+document.getElementById('htypeBar').addEventListener('click', e => {
+  const btn = e.target.closest('.htype-btn');
+  if (!btn) return;
+  selHtype = btn.dataset.htype;
+  document.querySelectorAll('.htype-btn').forEach(b => {
+    const isActive = b.dataset.htype === selHtype;
+    b.classList.toggle('active', isActive);
+    b.classList.toggle('active-all', isActive && selHtype === 'all');
+  });
+  renderSiteGrid(); renderSummary();
+});
+
+// ─── Helper: get visible sites given current filters ───────────────
+// Returns [{habitat, sid}] for all sites that match current selCity+selMonth+selHtype+selHabitat
+const HTYPE_MAP = { 'HE': 'Housing estate', 'UP': 'Urban park', 'G': 'Urban meadow', 'N': 'Natural' };
+function getVisibleSites() {
+  if (!selCity || !selMonth) return [];
+  const cityHabitats = CONFIG.sites[selCity] || {};
+  let habitatsToShow;
+  if (selHtype !== 'all') {
+    // Show only the habitat matching the type code
+    const hab = HTYPE_MAP[selHtype];
+    habitatsToShow = hab ? [hab] : [];
+  } else if (selHabitat) {
+    // Habitat dropdown is set, htype=all → show that one habitat
+    habitatsToShow = [selHabitat];
+  } else {
+    // Nothing selected → show all habitats
+    habitatsToShow = CONFIG.habitats;
+  }
+  const result = [];
+  for (const hab of habitatsToShow) {
+    const sites = cityHabitats[hab] || [];
+    for (const sid of sites) result.push({ habitat: hab, sid });
+  }
+  return result;
+}
+
+// ─── Site grid render ─────────────────────────────────────
+function renderSiteGrid() {
+  const wrap = document.getElementById('siteGridWrap');
+  const grid = document.getElementById('siteGrid');
+  if (!selCity || !selMonth) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+
+  // Build label
+  let label = `Sites — ${selCity} · ${selMonth}`;
+  if (selHtype !== 'all') label += ` · ${HTYPE_MAP[selHtype] || selHtype}`;
+  else if (selHabitat) label += ` · ${selHabitat}`;
+  document.getElementById('siteGridLabel').textContent = label;
+
+  const visible = getVisibleSites();
+  // Detect if we're showing multiple habitats (need to show tags)
+  const multiHabitat = new Set(visible.map(v => v.habitat)).size > 1;
+
+  grid.innerHTML = visible.map(({ habitat, sid }) => {
+    const site = getSite(selCity, selMonth, habitat, sid);
+    const observed = site?.observed ?? false;
+    // Short habitat code for tag
+    const htypeCode = Object.entries(HTYPE_MAP).find(([,v]) => v === habitat)?.[0] || '';
+    return `
+      <div class="site-pill${observed ? ' observed' : ''}"
+           data-siteid="${sid}" data-habitat="${habitat}"
+           title="${habitat} · Click to toggle">
+        <div class="site-pill-check">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        ${multiHabitat ? `<div class="pill-habitat-tag">${htypeCode}</div>` : ''}
+        <div class="site-pill-id">${esc(sid)}</div>
+        <div class="site-pill-status ${observed ? 'obs-status' : ''}">${observed ? 'Observed ✓' : 'Pending'}</div>
+      </div>`;
+  }).join('');
+}
+
+// Site pill click: toggle observed on/off
+document.addEventListener('click', e => {
+  const pill = e.target.closest('.site-pill');
+  if (!pill) return;
+  const sid = pill.dataset.siteid;
+  const habitat = pill.dataset.habitat;
+  const site = ensureSite(selCity, selMonth, habitat, sid);
+  site.observed = !site.observed;
+  save();
+  renderSiteGrid(); renderSummary();
+});
+
+// ─── Summary render ───────────────────────────────────────
+function renderSummary() {
+  // Summary mirrors what's visible in the grid
+  const visible = getVisibleSites();
+  const total = visible.length;
+  const obsCount = visible.filter(({habitat, sid}) => getSite(selCity, selMonth, habitat, sid)?.observed).length;
+  const pct = total ? Math.round((obsCount / total) * 100) : 0;
+  document.getElementById('pctLabel').textContent = `${pct}%`;
+  document.getElementById('progressFill').style.width = `${pct}%`;
+  document.getElementById('totalCount').textContent = total;
+  document.getElementById('obsCount').textContent = obsCount;
+  document.getElementById('pendCount').textContent = total - obsCount;
+  const wrap = document.getElementById('sumTableWrap');
+  wrap.style.display = total > 0 ? '' : 'none';
+  const multiHabitat = new Set(visible.map(v => v.habitat)).size > 1;
+  document.getElementById('sumBody').innerHTML = visible.map(({ habitat, sid }, i) => {
+    const observed = getSite(selCity, selMonth, habitat, sid)?.observed ?? false;
+    const htypeCode = Object.entries(HTYPE_MAP).find(([,v]) => v === habitat)?.[0] || '';
+    return `
+    <tr class="${observed ? 'obs-row' : ''}">
+      <td>${i+1}</td>
+      <td style="font-weight:500">${esc(sid)}${multiHabitat ? ` <span style="font-size:0.6rem;color:var(--text-faint);font-family:var(--font-mono)">${htypeCode}</span>` : ''}</td>
+      <td>${observed
+        ? '<span class="badge badge-green"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Observed</span>'
+        : '<span class="badge badge-amber">Pending</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── Session panel render ─────────────────────────────────
+function renderSessions() {
+  const sl = document.getElementById('sessionList');
+  if (!sessions.length) { sl.innerHTML = '<div class="empty-sessions">No saved sessions yet</div>'; return; }
+  sl.innerHTML = sessions.map(s => `
+    <div class="sess-item">
+      <span class="sess-name">${esc(s.name)}</span>
+      <button class="sess-load" data-action="load-sess" data-sid="${s.id}">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        Load
+      </button>
+      <button class="sess-del" data-action="del-sess" data-sid="${s.id}">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>`).join('');
+}
+
+function renderAll() { renderSiteGrid(); renderSummary(); renderSessions(); }
+
+// ─── Event delegation (sessions) ──────────────────────────
+document.addEventListener('click', e => {
+  const actionEl = e.target.closest('[data-action]');
+  if (!actionEl || actionEl.closest('.site-pill')) return;
+  const action = actionEl.dataset.action;
+  const sid = parseInt(actionEl.dataset.sid);
+
+  if (action === 'load-sess') {
+    const s = sessions.find(x => x.id === sid);
+    if (!s) return;
+    confirmDlg('Load session?', `This will replace <strong>all</strong> current data.`, 'Load session', () => {
+      allData = JSON.parse(JSON.stringify(s.data));
+      save(); renderAll(); toast('Session loaded');
+    });
+  }
+  else if (action === 'del-sess') {
+    const s = sessions.find(x => x.id === sid);
+    if (!s) return;
+    confirmDlg('Delete session?', `"<strong>${esc(s.name)}</strong>" will be deleted.`, 'Delete', () => {
+      sessions = sessions.filter(x => x.id !== sid); saveSess(); renderSessions(); toast('Session deleted');
+    });
+  }
+});
+
+// ─── Quick actions (sites) ────────────────────────────────
+document.getElementById('markAllSitesBtn').addEventListener('click', () => {
+  if (!selCity || !selMonth) return;
+  getVisibleSites().forEach(({habitat, sid}) => { ensureSite(selCity, selMonth, habitat, sid).observed = true; });
+  save(); renderSiteGrid(); renderSummary(); toast('All visible sites marked observed');
+});
+document.getElementById('resetSitesBtn').addEventListener('click', () => {
+  if (!selCity || !selMonth) return;
+  confirmDlg('Reset visible sites?', `All visible site observations will be cleared.`, 'Reset', () => {
+    getVisibleSites().forEach(({habitat, sid}) => { const b = getSite(selCity, selMonth, habitat, sid); if (b) b.observed = false; });
+    save(); renderSiteGrid(); renderSummary(); toast('Sites reset');
+  });
+});
+
+// ─── Sessions ─────────────────────────────────────────────
+document.getElementById('saveSessionBtn').addEventListener('click', () => {
+  const name = document.getElementById('sessionInput').value.trim();
+  if (!name) return;
+  sessions.push({ id: nextSessId++, name, data: JSON.parse(JSON.stringify(allData)) });
+  saveSess(); renderSessions(); document.getElementById('sessionInput').value = ''; toast('Session saved');
+});
+document.getElementById('sessionInput').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('saveSessionBtn').click(); });
+
+// ─── Helpers ──────────────────────────────────────────────
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// ─── Init ─────────────────────────────────────────────────
+loadData();
+renderAll();
+</script>
+</body>
+</html>
