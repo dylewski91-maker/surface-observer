@@ -538,7 +538,7 @@ function getVisibleSites() {
 function renderSiteGrid() {
   const wrap = document.getElementById('siteGridWrap');
   const grid = document.getElementById('siteGrid');
-  if (!selCity || !selMonth) { wrap.style.display = 'none'; return; }
+  if (!selCity || !selMonth || !selHabitat) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
 
   // Build label
