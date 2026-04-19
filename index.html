@@ -300,15 +300,6 @@
       <!-- Site ID grid (shows after city+month selected) -->
       <div id="siteGridWrap" style="display:none">
 
-        <!-- Habitat-type filter bar -->
-        <div class="htype-bar" id="htypeBar">
-          <button class="htype-btn active-all active" data-htype="all">All</button>
-          <button class="htype-btn" data-htype="HE">HE</button>
-          <button class="htype-btn" data-htype="UP">UP</button>
-          <button class="htype-btn" data-htype="G">G</button>
-          <button class="htype-btn" data-htype="N">N</button>
-        </div>
-
         <div class="site-grid-wrap">
           <div class="site-grid-header">
             <span class="site-grid-title" id="siteGridLabel">Sites</span>
@@ -410,7 +401,6 @@ const CONFIG = {
 // allData[city][month][habitat][siteId] = { observed: bool }
 let allData = {};
 let selCity = '', selMonth = '', selHabitat = '';
-let selHtype = 'all'; // 'all' | 'HE' | 'UP' | 'G' | 'N'
 let confirmCb = null;
 
 // ─── Persistence ─────────────────────────────────────────
@@ -485,53 +475,14 @@ document.getElementById('monthSelect').addEventListener('change', function() {
   selMonth = this.value; renderSiteGrid(); renderSummary();
 });
 document.getElementById('habitatSelect').addEventListener('change', function() {
-  selHabitat = this.value;
-  // If a specific habitat is chosen, keep htype filter in sync (or reset to all)
-  selHtype = 'all';
-  document.querySelectorAll('.htype-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.htype === 'all');
-    b.classList.toggle('active-all', b.dataset.htype === 'all');
-  });
-  renderSiteGrid(); renderSummary();
+  selHabitat = this.value; renderSiteGrid(); renderSummary();
 });
 
-// ─── Habitat-type filter bar ──────────────────────────────
-document.getElementById('htypeBar').addEventListener('click', e => {
-  const btn = e.target.closest('.htype-btn');
-  if (!btn) return;
-  selHtype = btn.dataset.htype;
-  document.querySelectorAll('.htype-btn').forEach(b => {
-    const isActive = b.dataset.htype === selHtype;
-    b.classList.toggle('active', isActive);
-    b.classList.toggle('active-all', isActive && selHtype === 'all');
-  });
-  renderSiteGrid(); renderSummary();
-});
-
-// ─── Helper: get visible sites given current filters ───────────────
-// Returns [{habitat, sid}] for all sites that match current selCity+selMonth+selHtype+selHabitat
-const HTYPE_MAP = { 'HE': 'Housing estate', 'UP': 'Urban park', 'G': 'Urban meadow', 'N': 'Natural' };
+// ─── Helper: get visible sites ──────────────────────────────
 function getVisibleSites() {
-  if (!selCity || !selMonth) return [];
-  const cityHabitats = CONFIG.sites[selCity] || {};
-  let habitatsToShow;
-  if (selHtype !== 'all') {
-    // Show only the habitat matching the type code
-    const hab = HTYPE_MAP[selHtype];
-    habitatsToShow = hab ? [hab] : [];
-  } else if (selHabitat) {
-    // Habitat dropdown is set, htype=all → show that one habitat
-    habitatsToShow = [selHabitat];
-  } else {
-    // Nothing selected → show all habitats
-    habitatsToShow = CONFIG.habitats;
-  }
-  const result = [];
-  for (const hab of habitatsToShow) {
-    const sites = cityHabitats[hab] || [];
-    for (const sid of sites) result.push({ habitat: hab, sid });
-  }
-  return result;
+  if (!selCity || !selMonth || !selHabitat) return [];
+  const sites = (CONFIG.sites[selCity] && CONFIG.sites[selCity][selHabitat]) || [];
+  return sites.map(sid => ({ habitat: selHabitat, sid }));
 }
 
 // ─── Site grid render ─────────────────────────────────────
@@ -541,29 +492,19 @@ function renderSiteGrid() {
   if (!selCity || !selMonth || !selHabitat) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
 
-  // Build label
-  let label = `Sites — ${selCity} · ${selMonth}`;
-  if (selHtype !== 'all') label += ` · ${HTYPE_MAP[selHtype] || selHtype}`;
-  else if (selHabitat) label += ` · ${selHabitat}`;
-  document.getElementById('siteGridLabel').textContent = label;
+  document.getElementById('siteGridLabel').textContent = `Sites — ${selCity} · ${selMonth} · ${selHabitat}`;
 
   const visible = getVisibleSites();
-  // Detect if we're showing multiple habitats (need to show tags)
-  const multiHabitat = new Set(visible.map(v => v.habitat)).size > 1;
-
   grid.innerHTML = visible.map(({ habitat, sid }) => {
     const site = getSite(selCity, selMonth, habitat, sid);
     const observed = site?.observed ?? false;
-    // Short habitat code for tag
-    const htypeCode = Object.entries(HTYPE_MAP).find(([,v]) => v === habitat)?.[0] || '';
     return `
       <div class="site-pill${observed ? ' observed' : ''}"
            data-siteid="${sid}" data-habitat="${habitat}"
-           title="${habitat} · Click to toggle">
+           title="Click to toggle observed">
         <div class="site-pill-check">
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
-        ${multiHabitat ? `<div class="pill-habitat-tag">${htypeCode}</div>` : ''}
         <div class="site-pill-id">${esc(sid)}</div>
         <div class="site-pill-status ${observed ? 'obs-status' : ''}">${observed ? 'Observed ✓' : 'Pending'}</div>
       </div>`;
@@ -596,14 +537,12 @@ function renderSummary() {
   document.getElementById('pendCount').textContent = total - obsCount;
   const wrap = document.getElementById('sumTableWrap');
   wrap.style.display = total > 0 ? '' : 'none';
-  const multiHabitat = new Set(visible.map(v => v.habitat)).size > 1;
   document.getElementById('sumBody').innerHTML = visible.map(({ habitat, sid }, i) => {
     const observed = getSite(selCity, selMonth, habitat, sid)?.observed ?? false;
-    const htypeCode = Object.entries(HTYPE_MAP).find(([,v]) => v === habitat)?.[0] || '';
     return `
     <tr class="${observed ? 'obs-row' : ''}">
       <td>${i+1}</td>
-      <td style="font-weight:500">${esc(sid)}${multiHabitat ? ` <span style="font-size:0.6rem;color:var(--text-faint);font-family:var(--font-mono)">${htypeCode}</span>` : ''}</td>
+      <td style="font-weight:500">${esc(sid)}</td>
       <td>${observed
         ? '<span class="badge badge-green"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Observed</span>'
         : '<span class="badge badge-amber">Pending</span>'}</td>
