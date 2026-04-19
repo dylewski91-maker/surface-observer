@@ -356,17 +356,10 @@
       </div>
     </div>
 
-    <!-- Sessions -->
-    <div class="card">
-      <div class="card-header"><span class="card-label">Saved Sessions</span></div>
-      <div class="sess-input-row">
-        <input type="text" id="sessionInput" class="text-input" placeholder="Session name…" />
-        <button class="btn btn-primary" id="saveSessionBtn" style="gap:0.25rem">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-          Save
-        </button>
-      </div>
-      <div id="sessionList"></div>
+    <!-- Auto-save notice -->
+    <div class="card" style="padding:0.75rem 1rem;display:flex;align-items:center;gap:0.5rem">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      <span style="font-size:0.75rem;color:var(--text-muted)">Progress saves automatically on this device</span>
     </div>
 
   </div>
@@ -416,20 +409,15 @@ const CONFIG = {
 // State
 // allData[city][month][habitat][siteId] = { observed: bool }
 let allData = {};
-let sessions = [];
-let nextSessId = 1;
 let selCity = '', selMonth = '', selHabitat = '';
 let selHtype = 'all'; // 'all' | 'HE' | 'UP' | 'G' | 'N'
 let confirmCb = null;
 
 // ─── Persistence ─────────────────────────────────────────
 function save() { try { localStorage.setItem('so3_data', JSON.stringify(allData)); } catch(e){} }
-function saveSess() { try { localStorage.setItem('so3_sess', JSON.stringify(sessions)); localStorage.setItem('so3_nsid', nextSessId); } catch(e){} }
 function loadData() {
   try {
     const d = localStorage.getItem('so3_data'); if (d) allData = JSON.parse(d);
-    const s = localStorage.getItem('so3_sess'); if (s) sessions = JSON.parse(s);
-    const n = localStorage.getItem('so3_nsid'); if (n) nextSessId = parseInt(n);
   } catch(e) {}
 }
 function ensureSite(city, month, habitat, site) {
@@ -623,48 +611,9 @@ function renderSummary() {
   }).join('');
 }
 
-// ─── Session panel render ─────────────────────────────────
-function renderSessions() {
-  const sl = document.getElementById('sessionList');
-  if (!sessions.length) { sl.innerHTML = '<div class="empty-sessions">No saved sessions yet</div>'; return; }
-  sl.innerHTML = sessions.map(s => `
-    <div class="sess-item">
-      <span class="sess-name">${esc(s.name)}</span>
-      <button class="sess-load" data-action="load-sess" data-sid="${s.id}">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-        Load
-      </button>
-      <button class="sess-del" data-action="del-sess" data-sid="${s.id}">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>`).join('');
-}
+function renderAll() { renderSiteGrid(); renderSummary(); }
 
-function renderAll() { renderSiteGrid(); renderSummary(); renderSessions(); }
 
-// ─── Event delegation (sessions) ──────────────────────────
-document.addEventListener('click', e => {
-  const actionEl = e.target.closest('[data-action]');
-  if (!actionEl || actionEl.closest('.site-pill')) return;
-  const action = actionEl.dataset.action;
-  const sid = parseInt(actionEl.dataset.sid);
-
-  if (action === 'load-sess') {
-    const s = sessions.find(x => x.id === sid);
-    if (!s) return;
-    confirmDlg('Load session?', `This will replace <strong>all</strong> current data.`, 'Load session', () => {
-      allData = JSON.parse(JSON.stringify(s.data));
-      save(); renderAll(); toast('Session loaded');
-    });
-  }
-  else if (action === 'del-sess') {
-    const s = sessions.find(x => x.id === sid);
-    if (!s) return;
-    confirmDlg('Delete session?', `"<strong>${esc(s.name)}</strong>" will be deleted.`, 'Delete', () => {
-      sessions = sessions.filter(x => x.id !== sid); saveSess(); renderSessions(); toast('Session deleted');
-    });
-  }
-});
 
 // ─── Quick actions (sites) ────────────────────────────────
 document.getElementById('markAllSitesBtn').addEventListener('click', () => {
@@ -680,14 +629,6 @@ document.getElementById('resetSitesBtn').addEventListener('click', () => {
   });
 });
 
-// ─── Sessions ─────────────────────────────────────────────
-document.getElementById('saveSessionBtn').addEventListener('click', () => {
-  const name = document.getElementById('sessionInput').value.trim();
-  if (!name) return;
-  sessions.push({ id: nextSessId++, name, data: JSON.parse(JSON.stringify(allData)) });
-  saveSess(); renderSessions(); document.getElementById('sessionInput').value = ''; toast('Session saved');
-});
-document.getElementById('sessionInput').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('saveSessionBtn').click(); });
 
 // ─── Helpers ──────────────────────────────────────────────
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
